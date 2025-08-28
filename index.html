@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Spotify 趣味マッチ</title>
+<title>Spotify Vibes Check ~ 音楽趣味のマッチ度合</title>
 <style>
   :root{ --bg:#0a0e16; --card:#12182a; --muted:#94a1b2; --text:#e8edf5; --acc:#1DB954; --line:#202842; }
   *{ box-sizing:border-box }
@@ -53,19 +53,19 @@
 <body>
 <div class="wrap">
   <div class="card">
-    <h1>Spotify 趣味マッチ</h1>
-    <p>オーナー（あなた）と訪問者の Spotify データを比較し、ジャンル・アーティスト・トラックの重なりで相性を出します（ジャンル50% / アーティスト25% / トラック25%）。処理はブラウザ内のみで保存しません。</p>
+    <h1>Spotify Vibes Match Check <span class="sub">〜 音楽趣味のマッチ度合</span></h1>
+    <p>開発者TakとVisitorのSpotify視聴データをAPIでリアルタイム取得して比較。ジャンル・アーティスト・トラックの重なりで相性を算出（ジャンル50% / アーティスト25% / トラック25%）。処理はブラウザ内のみでデータは保持しないので、ご安心ください。</p>
 
     <div class="row">
       <div class="pane">
-        <h3>① あなたのデータ</h3>
+        <h3>① TakのData</h3>
         <pre id="ownerPreview" class="mono small jsonbox">まだ未取得</pre>
       </div>
       <div class="pane">
-        <h3>② 訪問者のデータ</h3>
+        <h3>② Your Data</h3>
         <div style="display:flex; gap:8px; flex-wrap:wrap;">
-          <button id="loginBtn" class="btn btn-primary">Spotifyでログイン</button>
-          <button id="logoutBtn" class="btn btn-ghost">ログアウト</button>
+          <button id="loginBtn" class="btn btn-primary">Spotify login</button>
+          <button id="logoutBtn" class="btn btn-ghost">Log out</button>
         </div>
         <div id="meBox" class="small muted"></div>
         <pre id="visitorPreview" class="mono small jsonbox">未ログイン</pre>
@@ -75,11 +75,11 @@
     <div class="hr"></div>
 
     <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
-      <h3 style="margin:0;">相性スコア</h3>
+      <h3 style="margin:0;">Match Score</h3>
       <div class="seg" id="rangeSeg">
-        <button data-range="short_term">4週間</button>
-        <button data-range="medium_term" class="active">6か月</button>
-        <button data-range="long_term">全期間</button>
+        <button data-range="short_term">4 weeks</button>
+        <button data-range="medium_term" class="active">6 months</button>
+        <button data-range="long_term">All the life</button>
       </div>
     </div>
     <p class="small muted">選択した期間で、ジャンル・アーティスト・トラックの重なりを計算します（ジャンル完全一致）。</p>
@@ -101,13 +101,13 @@
 
     <div class="hr"></div>
 
-    <h3>ジャンルのブリッジ（訪問者に未経験：上位5）</h3>
+    <h3>新ジャンルを発見（New genres for you：上位5）</h3>
     <div id="bridgeGenres" class="tags"></div>
 
     <div class="hr"></div>
 
-    <h3>おすすめ（ブリッジ曲：上位10）</h3>
-    <p class="small muted">訪問者がまだ聴いていない、オーナーの曲から提案します。</p>
+    <h3>初体験の曲を発見（New Tracks for you：上位10）</h3>
+    <p class="small muted">あなたがまだ聴いていないTakの曲。</p>
     <div id="bridgeTracks" class="list"></div>
 
     <p class="small muted" style="margin-top:16px;">
@@ -148,9 +148,9 @@ function norm(s){ return (s||"").toLowerCase().trim(); }
 function toSet(arr){ return new Set(arr.map(norm)); }
 function jaccard(aSet, bSet){ let inter=0; for(const v of aSet) if(bSet.has(v)) inter++; const union=aSet.size+bSet.size-inter||1; return inter/union; }
 function verdictText(score){
-  if(score>=0.9) return {text:"波長バッチリ。語れる夜、確定です。",cls:"ok"};
-  if(score>=0.6) return {text:"共通点、多め。おすすめ交換からいきましょう。",cls:"warn"};
-  if(score>=0.3) return {text:"新発見の余地あり。ブリッジ曲をどうぞ。",cls:"warn"};
+  if(score>=0.7) return {text:"波長バッチリ。語れる夜、確定です。",cls:"ok"};
+  if(score>=0.4) return {text:"共通点、多め。おすすめ交換からいきましょう。",cls:"warn"};
+  if(score>=0.2) return {text:"新発見の余地あり。ブリッジ曲をどうぞ。",cls:"warn"};
   return {text:"真逆も面白い。世界を広げる相性です。",cls:"bad"};
 }
 /* 配列→頻度降順のユニーク配列 */
