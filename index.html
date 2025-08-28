@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Spotify 趣味マッチ</title>
+<style>
+  :root{ --bg:#0a0e16; --card:#12182a; --muted:#94a1b2; --text:#e8edf5; --acc:#1DB954; --line:#202842; }
+  *{ box-sizing:border-box }
+  body{
+    margin:0; background:linear-gradient(120deg,#060a12,#0e1324 40%,#0a1022);
+    color:var(--text); font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+  }
+  .wrap{ max-width:1000px; margin:36px auto; padding:0 16px; }
+  .card{ background:var(--card); border:1px solid var(--line); border-radius:18px; padding:22px; box-shadow:0 12px 32px rgba(0,0,0,.35); }
+  h1{ margin:0 0 6px; font-size:24px; }
+  p{ margin:6px 0 14px; color:var(--muted); }
+  .btn{ display:inline-flex; align-items:center; gap:8px; border:0; padding:12px 16px; border-radius:12px; cursor:pointer; font-weight:700; }
+  .btn-primary{ background:var(--acc); color:#06220f; }
+  .btn-ghost{ background:transparent; color:var(--text); border:1px solid var(--line); }
+  .btn:disabled{ opacity:.6; cursor:not-allowed; }
+  .row{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  @media (max-width:900px){ .row{ grid-template-columns:1fr; } }
+  .pane{ display:flex; flex-direction:column; gap:10px; min-width:0; }
+  .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+  .small{ font-size:12px; }
+  .muted{ color:var(--muted); }
+  .seg{ display:inline-flex; border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+  .seg button{ padding:8px 12px; background:transparent; color:var(--text); border:0; cursor:pointer; }
+  .seg button.active{ background:#1a2140; }
+  .hr{ height:1px; background:var(--line); margin:18px 0; }
+  .score{ font-size:44px; font-weight:900; margin:6px 0; letter-spacing:.5px; }
+  .ok{ color:#a7ffb3; } .warn{ color:#ffe2a2; } .bad{ color:#ffb3b3; }
+
+  pre.jsonbox{
+    background:#0b1026; border:1px solid var(--line); border-radius:12px;
+    padding:10px; max-height:260px; overflow:auto; width:100%;
+    white-space:pre-wrap; word-break:break-word;
+  }
+  .list{ display:grid; gap:8px; }
+  .item{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    background:#0f1430; border:1px solid #1f274b; padding:10px 12px; border-radius:12px;
+  }
+  .item .t{ font-size:14px; }
+  .item .open{ white-space:nowrap; }
+  .tags{ display:flex; flex-wrap:wrap; gap:6px; }
+  .tag{ display:inline-block; padding:6px 10px; border-radius:999px; background:#1b2240; color:#cfd7e3; font-size:12px; border:1px solid #2a355b; }
+  a.link{ color:#bcd3ff; text-decoration:none; border-bottom:1px dotted #3957a8; }
+  a.link:hover{ opacity:.85 }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <h1>Spotify 趣味マッチ</h1>
+    <p>オーナー（あなた）と訪問者の Spotify データを比較し、ジャンル・アーティスト・トラックの重なりで相性を出します（ジャンル50% / アーティスト25% / トラック25%）。処理はブラウザ内のみで保存しません。</p>
+
+    <div class="row">
+      <div class="pane">
+        <h3>① あなたのデータ</h3>
+        <pre id="ownerPreview" class="mono small jsonbox">まだ未取得</pre>
+      </div>
+      <div class="pane">
+        <h3>② 訪問者のデータ</h3>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button id="loginBtn" class="btn btn-primary">Spotifyでログイン</button>
+          <button id="logoutBtn" class="btn btn-ghost">ログアウト</button>
+        </div>
+        <div id="meBox" class="small muted"></div>
+        <pre id="visitorPreview" class="mono small jsonbox">未ログイン</pre>
+      </div>
+    </div>
+
+    <div class="hr"></div>
+
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+      <h3 style="margin:0;">相性スコア</h3>
+      <div class="seg" id="rangeSeg">
+        <button data-range="short_term">4週間</button>
+        <button data-range="medium_term" class="active">6か月</button>
+        <button data-range="long_term">全期間</button>
+      </div>
+    </div>
+    <p class="small muted">選択した期間で、ジャンル・アーティスト・トラックの重なりを計算します（ジャンル完全一致）。</p>
+
+    <div>
+      <div class="score" id="scoreLong">-- %</div>
+      <div class="muted" id="verdictLong"></div>
+    </div>
+
+    <div class="hr"></div>
+
+    <h3>共通ジャンル（上位5）</h3>
+    <div id="commonGenres" class="tags"></div>
+
+    <div class="hr"></div>
+
+    <h3>共通トラック（上位10）</h3>
+    <div id="commonTracks" class="list"></div>
+
+    <div class="hr"></div>
+
+    <h3>ジャンルのブリッジ（訪問者に未経験：上位5）</h3>
+    <div id="bridgeGenres" class="tags"></div>
+
+    <div class="hr"></div>
+
+    <h3>おすすめ（ブリッジ曲：上位10）</h3>
+    <p class="small muted">訪問者がまだ聴いていない、オーナーの曲から提案します。</p>
+    <div id="bridgeTracks" class="list"></div>
+
+    <p class="small muted" style="margin-top:16px;">
+      このアプリは Spotify の認証を利用して一時的にデータを取得します。処理はブラウザ内のみで、サーバーに保存されません。
+    </p>
+  </div>
+</div>
+
+<script>
+/* ==== 設定 ==== */
+const CLIENT_ID   = "122be89ef88545598cf07b3ca186e579";
+const REDIRECT_URI = "https://TakeshiKanamori20.github.io/spotify-match/";
+const SCOPES = ["user-top-read"];
+const TOKEN_KEY = "sp_token";
+const VERIFIER_KEY = "sp_verifier";
+
+/* ==== 状態 ==== */
+let currentRange = "medium_term";
+let tokenCache = null;
+
+/* オーナー全期間キャッシュ（genresも保持） */
+const ownerCache = {
+  short_term:  { artists:[], tracks:[], genres:[] },
+  medium_term: { artists:[], tracks:[], genres:[] },
+  long_term:   { artists:[], tracks:[], genres:[] }
+};
+/* 訪問者（選択期間） */
+let visitorData = { artists:[], tracks:[], genres:[] };
+
+/* ==== ユーティリティ ==== */
+async function sha256(str){
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
+  return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+}
+function randString(len=64){ const c="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~"; let s=""; for(let i=0;i<len;i++) s+=c[Math.floor(Math.random()*c.length)]; return s; }
+function escapeHtml(s){ return (s||"").replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m])); }
+function norm(s){ return (s||"").toLowerCase().trim(); }
+function toSet(arr){ return new Set(arr.map(norm)); }
+function jaccard(aSet, bSet){ let inter=0; for(const v of aSet) if(bSet.has(v)) inter++; const union=aSet.size+bSet.size-inter||1; return inter/union; }
+function verdictText(score){
+  if(score>=0.9) return {text:"波長バッチリ。語れる夜、確定です。",cls:"ok"};
+  if(score>=0.6) return {text:"共通点、多め。おすすめ交換からいきましょう。",cls:"warn"};
+  if(score>=0.3) return {text:"新発見の余地あり。ブリッジ曲をどうぞ。",cls:"warn"};
+  return {text:"真逆も面白い。世界を広げる相性です。",cls:"bad"};
+}
+/* 配列→頻度降順のユニーク配列 */
+function uniqueByFreq(list){
+  const freq = new Map();
+  for(const g of list){ const k=norm(g); if(!k) continue; freq.set(k, (freq.get(k)||0)+1); }
+  return [...freq.entries()].sort((a,b)=>b[1]-a[1]).map(([k])=>k);
+}
+
+/* ==== 認証（PKCE） ==== */
+async function beginLogin(){
+  const codeVerifier = randString(64);
+  localStorage.setItem(VERIFIER_KEY, codeVerifier);
+  const codeChallenge = await sha256(codeVerifier);
+  const params = new URLSearchParams({
+    response_type: "code",
+    client_id: CLIENT_ID,
+    code_challenge_method: "S256",
+    code_challenge: codeChallenge,
+    redirect_uri: REDIRECT_URI,
+    scope: SCOPES.join(" ")
+  });
+  location.href = `https://accounts.spotify.com/authorize?${params.toString()}`;
+}
+async function handleCallback(){
+  const url = new URL(location.href);
+  const code = url.searchParams.get("code");
+  if(!code) return null;
+  url.searchParams.delete("code");
+  history.replaceState({}, "", url.toString());
+  const codeVerifier = localStorage.getItem(VERIFIER_KEY);
+  const body = new URLSearchParams({
+    client_id: CLIENT_ID, grant_type: "authorization_code", code, redirect_uri: REDIRECT_URI, code_verifier: codeVerifier
+  });
+  const res = await fetch("https://accounts.spotify.com/api/token", {
+    method:"POST", headers:{ "Content-Type":"application/x-www-form-urlencoded" }, body
+  });
+  const data = await res.json();
+  if(data.access_token){ localStorage.setItem(TOKEN_KEY, data.access_token); return data.access_token; }
+  return null;
+}
+function logout(){ localStorage.removeItem(TOKEN_KEY); location.reload(); }
+
+/* ==== API ==== */
+async function apiGET(path, token){
+  const res = await fetch(`https://api.spotify.com/v1${path}`, { headers:{ Authorization:`Bearer ${token}` }});
+  if(!res.ok) throw new Error(`Spotify API error: ${res.status} ${path}`);
+  return res.json();
+}
+async function fetchTop(type="artists", token, limit=50, time_range="medium_term"){
+  return apiGET(`/me/top/${type}?limit=${limit}&time_range=${time_range}`, token);
+}
+async function getMe(token){ return apiGET("/me", token); }
+
+/* ==== データ取得 ==== */
+async function loadOwnerAllRanges(token){
+  for(const range of ["short_term","medium_term","long_term"]){
+    const arts = await fetchTop("artists", token, 50, range);
+    const trks = await fetchTop("tracks",  token, 50, range);
+
+    ownerCache[range].artists = arts.items.map(a => a.name);
+    ownerCache[range].tracks  = trks.items.map(t => ({
+      id: t.id, uri: t.uri, display: `${t.name} - ${t.artists.map(a=>a.name).join(", ")}`
+    }));
+    // ジャンルはアーティストの genres を集計（完全一致、頻度降順で保持）
+    const allGenres = arts.items.flatMap(a => a.genres || []);
+    ownerCache[range].genres = uniqueByFreq(allGenres);
+  }
+  document.getElementById("ownerPreview").textContent =
+    JSON.stringify({
+      artists: ownerCache[currentRange].artists,
+      tracks:  ownerCache[currentRange].tracks.map(t=>t.display),
+      genres:  ownerCache[currentRange].genres
+    }, null, 2);
+}
+
+async function loadVisitorRange(token, range){
+  const [arts, trks] = await Promise.all([
+    fetchTop("artists", token, 50, range),
+    fetchTop("tracks",  token, 50, range)
+  ]);
+  visitorData.artists = arts.items.map(a => a.name);
+  visitorData.tracks  = trks.items.map(t => ({
+    id: t.id, uri: t.uri, display: `${t.name} - ${t.artists.map(a=>a.name).join(", ")}`
+  }));
+  const allGenres = arts.items.flatMap(a => a.genres || []);
+  visitorData.genres = uniqueByFreq(allGenres);
+
+  document.getElementById("visitorPreview").textContent =
+    JSON.stringify({
+      artists: visitorData.artists,
+      tracks:  visitorData.tracks.map(t=>t.display),
+      genres:  visitorData.genres
+    }, null, 2);
+}
+
+/* ==== 表示 ==== */
+function setScore(score){
+  const pct = Math.round(score*100);
+  document.getElementById("scoreLong").textContent = `${pct} %`;
+  const v = verdictText(score);
+  const el = document.getElementById("verdictLong");
+  el.className = `muted ${v.cls}`;
+  el.textContent = v.text;
+}
+function renderTags(keys, containerId, limit=5){
+  const el = document.getElementById(containerId);
+  if(!keys.length){ el.innerHTML = `<span class="small muted">該当なし</span>`; return; }
+  el.innerHTML = keys.slice(0,limit).map(g => `<span class="tag">${escapeHtml(g)}</span>`).join("");
+}
+function renderTrackList(items, containerId){
+  const el = document.getElementById(containerId);
+  if(items.length === 0){ el.innerHTML = `<div class="small muted">該当なし</div>`; return; }
+  el.innerHTML = items.map(t => `
+    <div class="item">
+      <div class="t">${escapeHtml(t.display)}</div>
+      <div class="open">
+        <button class="btn btn-ghost small" onclick="openSpotifyTrack('${t.id}')">▶ 開く</button>
+        <a class="link" href="https://open.spotify.com/track/${t.id}" target="_blank" rel="noopener">Webで開く</a>
+      </div>
+    </div>
+  `).join("");
+}
+function openSpotifyTrack(id){
+  const uri = `spotify:track:${id}`;
+  const url = `https://open.spotify.com/track/${id}`;
+  const start = Date.now(); window.location.href = uri;
+  setTimeout(()=>{ if(Date.now()-start < 1200) window.location.href = url; }, 800);
+}
+
+/* ==== メイン計算 ==== */
+async function runAll(range = currentRange){
+  const token = tokenCache || localStorage.getItem(TOKEN_KEY);
+  if(!token) return;
+
+  const me = await getMe(token).catch(()=>null);
+  if(me){ document.getElementById("meBox").textContent = `ログイン中: ${me.display_name || me.id}`; }
+
+  await loadVisitorRange(token, range);
+  const owner = ownerCache[range];
+
+  // セット化
+  const setOwnerArtists = toSet(owner.artists);
+  const setOwnerTracks  = toSet(owner.tracks.map(t=>t.display));
+  const setOwnerGenres  = toSet(owner.genres);
+
+  const setVisitArtists = toSet(visitorData.artists);
+  const setVisitTracks  = toSet(visitorData.tracks.map(t=>t.display));
+  const setVisitGenres  = toSet(visitorData.genres);
+
+  // ジャンル50% + アーティスト25% + トラック25%
+  const sGenres  = jaccard(setOwnerGenres,  setVisitGenres);
+  const sArtists = jaccard(setOwnerArtists, setVisitArtists);
+  const sTracks  = jaccard(setOwnerTracks,  setVisitTracks);
+  const score = 0.50*sGenres + 0.25*sArtists + 0.25*sTracks;
+  setScore(score);
+
+  // 共通ジャンル（頻度降順の並びを使う：訪問者の並びを優先）
+  const commonGenres = visitorData.genres.filter(g => setOwnerGenres.has(norm(g)));
+  renderTags(commonGenres, "commonGenres", 5);
+
+  // 共通トラック（訪問者の並び順で上位10）
+  const commonTracks = visitorData.tracks.filter(t => setOwnerTracks.has(norm(t.display))).slice(0,10);
+  renderTrackList(commonTracks, "commonTracks");
+
+  // ジャンルのブリッジ（オーナーにあって訪問者にない）
+  const bridgeGenres = owner.genres.filter(g => !setVisitGenres.has(norm(g)));
+  renderTags(bridgeGenres, "bridgeGenres", 5);
+
+  // ブリッジ曲（オーナーにあって訪問者にない）
+  const visitTrackSet = setVisitTracks;
+  const bridgeTracks = owner.tracks.filter(t => !visitTrackSet.has(norm(t.display))).slice(0,10);
+  renderTrackList(bridgeTracks, "bridgeTracks");
+
+  // プレビュー更新（選択期間）
+  document.getElementById("ownerPreview").textContent =
+    JSON.stringify({ artists: owner.artists, tracks: owner.tracks.map(t=>t.display), genres: owner.genres }, null, 2);
+}
+
+/* ==== イベント ==== */
+document.getElementById("loginBtn").addEventListener("click", beginLogin);
+document.getElementById("logoutBtn").addEventListener("click", logout);
+document.getElementById("rangeSeg").addEventListener("click", (e)=>{
+  const btn = e.target.closest("button[data-range]"); if(!btn) return;
+  [...document.querySelectorAll("#rangeSeg button")].forEach(b=>b.classList.remove("active"));
+  btn.classList.add("active");
+  currentRange = btn.dataset.range;
+  runAll(currentRange);
+});
+
+/* ==== 初期 ==== */
+handleCallback().then(async token=>{
+  tokenCache = token || localStorage.getItem(TOKEN_KEY);
+  if(tokenCache){
+    await loadOwnerAllRanges(tokenCache);
+    runAll(currentRange);
+  }
+});
+</script>
+</body>
+</html>
